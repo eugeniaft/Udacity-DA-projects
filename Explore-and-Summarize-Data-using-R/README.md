@@ -11,7 +11,7 @@ This Rmd file contains all the analysis of the dataset (including final plots, s
 ##### Knitted html file: ```explore_wdi_data.html```
 HTML file knitted from the RMD file using the knitr package.
 
-##### The dataset: ```data.txt```
+##### The dataset: ```about_the_data.txt```
 This txt file containts a short description of the source of the data and an explanation of the variables in the data set.
 
 ##### References
