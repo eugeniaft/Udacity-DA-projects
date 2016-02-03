@@ -1,0 +1,26 @@
+WORDL BANK (WB) World Development Indicators (WDI)
+
+From WB website:
+
+"The primary World Bank collection of development indicators, compiled from officially-recognized international sources. It presents the most current and accurate global development data available, and includes national, regional and global estimates."
+
+
+SP.DYN.LE00.IN 		= Life expectancy at birth, total (years)
+SP.DYN.LE00.MA.IN 	= Life expectancy at birth, male (years)
+SP.DYN.LE00.FE.IN 	= Life expectancy at birth, female (years)
+NY.GDP.PCAP.KD 		= GDP per capita (constant 2000 US$)
+SH.XPD.PCAP    		= Health expenditure per capita (current US$)
+EN.ATM.CO2E.PC 		= CO2 emissions (metric tons per capita) 
+SP.URB.TOTL.IN.ZS 	= Urban population (% of total)  
+SP.RUR.TOTL.ZS 		= Rural population (% of total population)          
+SL.UEM.TOTL.FE.ZS 	= Unemployment, female (% of female labor force) 
+SL.UEM.TOTL.MA.ZS 	= Unemployment, male (% of male labor force)
+SL.UEM.TOTL.ZS  	= Unemployment, total (% of total labor force)
+SP.POP.TOTL 		= Total population 
+SH.STA.ACSN 		= Improved sanitation facilities (% of population with access)
+income			= World Bank income classification
+year			= 2005-1013
+region
+longitude
+latitude
+
