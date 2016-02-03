@@ -1,0 +1,827 @@
+# What are the determinants of life expectancy?
+
+by Eugenia Fernandez
+========================================================
+
+## Abstract
+
+What factors account for the differences in life expectancy among countries? Do countries in tropical regions and with higher prevalence of infectious diseases have lower life expectancy? Or, is it merely a countries income level(GPA)? Sanitation level? What are the effects of CO2 emissions? Are all these differences equal across genders too? 
+
+This project will explore these questions using data from the the World Bank's World Development Indicators(WDI).
+
+```{r global_options, include=FALSE} 
+knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/', echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+
+```{r, packages}
+# Load packages
+
+library(rgeos)
+#install.packages("Cairo")
+library(Cairo)
+#library(ggmap)
+library(scales)
+library(RColorBrewer)
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(reshape)
+library(reshape2)
+library(maptools)
+#library(rworldmap)
+library(curl)
+library(stringi)
+library(geosphere)
+library(gridExtra)
+library(GGally)
+library(scales)
+library(memisc)
+library(devtools)
+library(choroplethr)
+library(RJSONIO)
+library(WDI)
+library(plm)
+```
+
+```{r, Load_the_Data}
+
+# I load data specifying the indicators I am interested, the countries and
+# years. 
+# I chose all countries and years from 2005 to 2013
+
+indicators <- c('SP.DYN.LE00.FE.IN', 'SP.DYN.LE00.IN', 'SP.DYN.LE00.MA.IN',
+                'NY.GDP.PCAP.KD', 'SH.XPD.PCAP',
+                'EN.ATM.CO2E.PC', 'SP.URB.TOTL.IN.ZS', 'SP.RUR.TOTL.ZS',
+                'SL.UEM.TOTL.FE.ZS', 'SL.UEM.TOTL.MA.ZS', 'SL.UEM.TOTL.ZS', 
+                'SP.POP.TOTL', 'SH.STA.ACSN')
+
+df <- WDI(indicator=indicators, country='all', start=2005, end=2013, 
+          extra = TRUE)
+
+# Discard aggregated information
+df <- df[df$region != 'Aggregates', ]
+
+# Cleaning up NAs:
+
+# Discard data for countries where all the indicators are NA
+
+df <- df[!(rowSums(is.na(df))==NCOL(df)),] 
+
+# Discard data for rows where the life expectancy indicator is missing
+
+df <- df[!is.na(df$SP.DYN.LE00.IN), ]
+
+# Rename variables
+df <- rename(df, c('SP.DYN.LE00.FE.IN' = 'life.expect.f',
+                   'SP.DYN.LE00.IN' = 'life.expect',
+                   'SP.DYN.LE00.MA.IN' = 'life.expect.m',
+                   'NY.GDP.PCAP.KD' = 'gdp.pc',
+                   'SH.XPD.PCAP'    = 'health.expend.pc',
+                   'EN.ATM.CO2E.PC' = 'co2.em.pc', 
+                   'SP.URB.TOTL.IN.ZS' = 'urban.pop.pct',  
+                   'SP.RUR.TOTL.ZS' = 'rural.pop.pct',                   
+                   'SL.UEM.TOTL.FE.ZS' = 'unemp.rate.f', 
+                   'SL.UEM.TOTL.MA.ZS'= 'unemp.rate.m',
+                   'SL.UEM.TOTL.ZS' = 'unemp.rate.tot',
+                   'SP.POP.TOTL' = 'population', 
+                   'SH.STA.ACSN' = 'san.access.pct'))
+
+# Create variable indicating if country is in tropical region
+
+df$latitude <- as.numeric(as.character(df$latitude))
+df$tropic <- factor(df$latitude<23.43721 & df$latitude>-23.43721)
+
+# Create variable indicating if country is mostly rural 
+# (if >50% of population live in rural reas)
+
+df$rural <- factor(df$rural.pop.pct >= 50)
+
+````
+
+# Univariate Plots Section
+
+### Brief summary of the dataset
+
+Let's first see what variables are in the dataset and do some summary statistics of all indicators.
+
+```{r, Data_Exploration_I}
+str(df)
+
+````
+
+Since the focus of this study is on the determinants of life expectancy, let's first focus on this indicator.
+
+####Average total life expectancy 
+```{r}
+summary(df$life.expect)
+```
+
+####Average female life expectancy
+```{r}
+summary(df$life.expect.f)
+```
+
+####Average male life expectancy
+```{r}
+summary(df$life.expect.m)
+```
+
+####Histogram of average life expectancy
+```{r}
+ggplot(aes(x = life.expect), data = df) + 
+        geom_histogram(color = "black", fill = "light blue", binwidth = 1) +
+        geom_vline(aes(xintercept=mean(life.expect)),
+                   color="blue", size=1) +
+        geom_text(aes(x=65, label="Mean = 69.90", y=100), 
+                  colour="blue", angle=0, vjust = 1.2, 
+                  text=element_text(size=11)) +
+        xlab('life expectancy (yrs)') + 
+        ggtitle('Life Expectancy')
+```
+
+The distribution looks skewed to the left, indicating that the majority of countries concentrate on longer life expectancy values but there are a few countries with very low values of life expectancy. There is also a large percentage of individuals concentrated around 74 and around 80.
+
+####Histogram of female average life expectancy
+```{r}
+ggplot(aes(x = life.expect.f), data = df) + 
+        geom_histogram(color = "black", fill = "light blue", binwidth = 1) +
+        geom_vline(aes(xintercept=mean(life.expect.f)),
+                   color="blue", size=1) +
+        geom_text(aes(x=67, label="Mean =  72.35", y=100), 
+                  colour="blue", angle=0, vjust = 1.2, 
+                  text=element_text(size=11)) +
+        xlab('female life expectancy (yrs)') + 
+        ggtitle('Female Life Expectancy')
+```
+
+This is similar when looking only at women.
+
+####Histogram of male average life expectancy
+```{r}
+
+ggplot(aes(x = life.expect.m), data = df) + 
+        geom_histogram(color = "black", fill = "light blue", binwidth = 1) +
+        geom_vline(aes(xintercept=mean(life.expect.m)),
+                   color="blue", size=1) +
+        geom_text(aes(x=63, label="Mean = 67.57", y=92), 
+                  colour="blue", angle=0, vjust = 1.2, 
+                  text=element_text(size=11)) +
+        xlab('male life expectancy (yrs)') + 
+        ggtitle('Male Life Expectancy')
+
+```
+
+Men's distribution is less skewed and average life expectancy is greater for women than for men. 
+
+### life expectancy by year 
+
+```{r}
+
+ggplot(aes(x = life.expect), data = df) + 
+        geom_histogram(color = "black", fill = "light blue", binwidth = 1) +
+        facet_wrap(~year) + 
+        xlab('life expectancy (yrs)') +
+        ggtitle('Life Expectancy over the years')
+```
+
+The left skewed distribution continues in these graphs when we facet the data by year. 
+
+### Change in life expectancy by year
+
+```{r}
+
+df.le_by_year <- df %>% #ctrl + shift + m
+        group_by(year) %>%
+        summarise(mean_le = mean(life.expect),
+                  mean_lef = mean(life.expect.f),
+                  mean_lem = mean(life.expect.m),
+                  n = n()) %>%
+        ungroup()
+
+ggplot(aes(x = year, y = mean_le),
+       data = df.le_by_year) + 
+        geom_line() +
+        ylab('mean life expectancy (yrs)') +
+        ggtitle('Change in Life Expectancy')
+
+```
+
+### Rate of change in life expectancy
+
+```{r}
+
+avg_rate_le_growth = (max(df.le_by_year$mean_le) - 
+                              min(df.le_by_year$mean_le)) / (2013 - 2005)
+avg_rate_le_growth
+
+```
+
+Mean life expectancy increased over time, at an average rate of approximately less than .35 years per year. 
+
+
+### Distributional differences in life expectancy among countries across years.
+
+```{r}
+
+ggplot() + 
+        geom_boxplot(data = df, aes(x = year, y = life.expect, group = year)) +
+        ylab('life expectancy (yrs)') +
+        ggtitle('Life Expectancy over the years')
+   
+```
+
+Looking at boxplots, we see that there were negative outliers in 2005 to 2008 and that observations appear to have less dispersion in 2013. From looking at this graph, there seems to be a trend of convergence.
+
+### Other indicators
+
+```{r}
+
+summary(df)
+```
+
+### sanitation access (percent of population).
+
+```{r}
+ggplot(aes(x = san.access.pct), data = df) + 
+        geom_histogram(color = "black", fill = "gray") +
+        xlab('sanitation access (percent)') +
+        ggtitle('Access to Sanitation')
+
+```
+
+Sanitation access looks highly skewed to the left.
+
+```{r}
+ggplot(aes(x = san.access.pct), data = df) + 
+        geom_histogram(color = "black", fill = "gray") +
+        facet_wrap(~year) +
+        xlab('sanitation access (percent)') + 
+        ggtitle('Sanitation Access over the years')
+```
+
+This distribution does not change with time. 
+
+Given the distribution of this indicator, we will create a factor variable with four levels:    
+
+        "poor" <=50%
+        "regular" >50% and <=80%
+        "good" >80% and <=95%
+        "great" > 95%. 
+
+### Histogram of sanitation access
+
+```{r}
+df$san.acc.fc <- cut(df$san.access.pct, breaks = c(0, 50, 80, 95, 100))
+ggplot(aes(x = san.acc.fc), data = subset(df, !is.na(san.acc.fc))) + 
+        geom_histogram(color = "black", fill = "gray") +
+        facet_wrap(~year) +
+        xlab('sanitation access (percent)') + 
+        ggtitle('Sanitation Access over the years')
+```
+
+
+Now, let's explore the other indicators in the dataset. 
+As before, let's look at how they changed over time.
+
+### Change of GDP per capita by year
+
+```{r}
+df.gdp_by_year <- df %>% #ctrl + shift + m
+        filter(!is.na(gdp.pc))  %>%
+        group_by(year) %>%
+        summarise(mean_gdp = mean(gdp.pc),
+                  median_gdp = median(as.numeric(gdp.pc)),
+                  n = n()) %>%
+        ungroup()
+
+ggplot(aes(x = year, y = mean_gdp),
+       data = df.gdp_by_year) + 
+        geom_line() +
+        ylab('mean GDP (US dollars)') +
+        ggtitle('Change in GDP')
+```
+
+####Let's add a line when the financial crisis occurred
+```{r}
+ggplot(aes(x = year, y = mean_gdp),
+       data = df.gdp_by_year) + 
+        geom_line() +
+        geom_vline(aes(xintercept = 2008), colour = "red") +
+        geom_text(aes(x=2007.7, label="Financial Crisis", y=11400), 
+                  colour="red", angle=90, vjust = 1.2, 
+                  text=element_text(size=11)) +
+        ylab('mean GDP (US dollars)') +
+        ggtitle('Change in GDP')
+```
+
+As expected, GDP decreased after the 2008 financial crisis
+
+### Change in health expenditure per capita by year
+```{r}
+
+df.hexp_by_year <- df %>% 
+        filter(!is.na(health.expend.pc))  %>%
+        group_by(year) %>%
+        summarise(mean_hexp = mean(health.expend.pc),
+                  median_hexp = median(as.numeric(health.expend.pc)),
+                  n = n()) %>%
+        ungroup()
+
+ggplot(aes(x = year, y = mean_hexp),
+       data = df.hexp_by_year) + 
+        geom_line() +
+        ylab('mean health expenditure per capita (US dollars)') +
+        ggtitle('Change in Health Expenditure')
+
+```
+
+### Change in CO2 emmissions by year
+
+```{r}
+df.co2_by_year <- df %>% 
+        filter(!is.na(co2.em.pc))  %>%
+        group_by(year) %>%
+        summarise(mean_co2 = mean(co2.em.pc),
+                  median_co2 = median(as.numeric(co2.em.pc)),
+                  n = n()) %>%
+        ungroup()
+
+ggplot(aes(x = year, y = mean_co2),
+       data = df.co2_by_year) + 
+        geom_line() +
+        ylab('Mean CO2 emmissions (metric tons per capita)') +
+        ggtitle('Change in CO2 emmissions')
+
+tapply(df$co2.em.pc, df$year, summary)
+
+```
+
+CO2 emissions suffered a decrease in 2009, could be as a consequence of the financial crisis. 
+
+### Distributional differences of indicators across years.
+
+```{r}
+
+#GDP per capita
+
+ggplot() + geom_boxplot(data = df, aes(x = year, y = gdp.pc, 
+    group = year)) +
+        ylab('GDP per capita (US dollars)') +
+        ggtitle('GDP over the years')
+
+#Health Expenditure per capita
+
+ggplot() + geom_boxplot(data = df, aes(x = year, y = health.expend.pc, 
+    group = year)) +
+        ylab('health expenditure per capita (US dollars)') +
+        ggtitle('Health Expenditure over the years')
+
+# CO2 emissions per capita
+
+ggplot() + geom_boxplot(data = df, aes(x = year, y = co2.em.pc, 
+    group = year)) +
+        ylab('CO2 emmissions per capita (metric tons)') +
+        ggtitle('CO2 emmissions over the years')
+
+```
+
+All three indicators are skewed to the right and have positive outliers, so we should be careful about this when looking at correlations. 
+
+# Univariate Analysis
+
+### What is the structure of your dataset?
+After cleaning up the data I ended up with a dataset with 25 columns and 1787 rows. The data contains information about 201 countries (here not only sovereign states are included but also dependent states, unincorporated territories, etc.) for years 2005 to 2013.
+
+```{r}
+dim(df)
+```
+
+
+### What are the main features of interest in your dataset?
+I am interested in exploring what indicators have an effect on <code>life.expect</code>, <code>life.expect.f</code>, and <code>life.expect.m</code>. I chose indicators from the World Bank Development Indicators database that are relevant to this question. The indicators I will focus on are: <code>gdp.pc</code>, <code>health.expend.pc</code>, <code>co2.em.pc</code>, <code>urban.pop.pct</code>, <code>rural.pop.pct</code>, <code>unemp.rate.tot</code>, <code>unemp.rate.f</code>, <code>unemp.rate.m</code>, <code>tropic</code>, <code>san.access.pct</code> 
+
+### What other features in the dataset do you think will help support your investigation into your features of interest?
+I have information for different years so it is interesting to see how this indicators also change with time.
+
+### Did you create any new variables from existing variables in the dataset?
+
+I created the following variables:
+
+<code>tropic</code> which equals TRUE if country is in the Tropics Region. 
+
+<code>san.acc.fc</code> with five levels.
+
+<code>rural</code> equals 1 if more than 50% of the population live in rural areas.
+
+I also created aggregated datasets by year: <code>gdp.ocp</code>, <code>health.expend.pc</code>, <code>co2.em.pc</code>.
+
+### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? 
+To my knowledge, I did not find any unusual distributions. There were some missing observations that were problematic for the purpose of the study. I eliminated rows with NAs for the <code>life.expect</code> indicator and for countries where all columns where NAs.
+
+# Bivariate Plots Section
+
+### Investigating how life expectancy varies by country
+
+```{r}
+
+# I wanted to see how life expentancy varied across countries and the best way to
+# visualize this is with a choroplethr map.
+
+m1 <- choroplethr_wdi(code = "SP.DYN.LE00.IN", year = 2005, title = "Life
+                      Expectancy in 2005", num_colors = 7)
+m1
+m3 <- choroplethr_wdi(code = "SP.DYN.LE00.IN", year = 2011, title = "Life
+                      Expectancy in 2010", num_colors = 7)
+m3             
+
+```
+
+Life expectancy varies greatly by country. Countries with high average life expectancy tend to be more developed countries. From looking at this map we can think that life expectancy is strongly correlated with income level.
+
+### Exploring bivariate relationships
+
+```{r}
+
+# First, I subset the dataset with the indicators of interest. 
+# I also choose one year so we get rid of the effects of time, I
+# choose the most recent data we have with the least number of NAs.
+
+df_2011 <- subset(df, year == 2011)
+
+# I subset in two groups so that the output is easier to read
+
+df.sub1_2011 <- subset(df_2011, select = c(life.expect, gdp.pc, 
+                               health.expend.pc, co2.em.pc,
+                               unemp.rate.tot))
+
+df.sub2_2011 <- subset(df_2011, select = c(life.expect, urban.pop.pct, 
+                                           rural.pop.pct, san.acc.fc, 
+                                           tropic))
+ggpairs(df.sub1_2011)
+ggpairs(df.sub2_2011)
+
+```
+
+Let's try to do some transformations to the data to account for the non-linear
+relationships found on some of the previous plots and add a trend line.
+
+### Life expectancy and GDP
+
+```{r}
+
+ggplot(aes(x = gdp.pc, y = life.expect),
+       data = df_2011) + 
+        geom_point() +
+        xlab('GDP per capita (US dollars)') +
+        ylab('life expectancy (yrs)') +
+        ggtitle('GDP and Life Expectancy')
+```
+
+
+```{r}
+
+ggplot(aes(x = gdp.pc, y = life.expect),
+       data = df_2011) + 
+        geom_point() +
+        scale_x_log10() +
+        xlab('GDP per capita (US dollars)') +
+        ylab('life expectancy (yrs)') +
+        ggtitle('GDP and Life Expectancy')
+```
+
+```{r}
+ggplot(aes(x = gdp.pc, y = life.expect),
+       data = df_2011) + 
+        geom_point() +
+        geom_smooth() +
+        scale_x_log10() +
+        xlab('GDP per capita (US dollars, in logs)') +
+        ylab('life expectancy (yrs)') +
+        ggtitle('GDP and Life Expectancy')
+
+```
+
+### Life expectancy and health expenditure
+
+```{r}
+
+ggplot(aes(x = health.expend.pc, y = life.expect),
+       data = df_2011) + 
+        geom_point() +
+        xlab('health expenditure per capita (US dollars)') +
+        ylab('life expectancy (yrs)') +
+        ggtitle('Health Expenditure and Life Expectancy')
+
+ggplot(aes(x = health.expend.pc, y = life.expect),
+       data = df_2011) + 
+        geom_point() +
+        geom_smooth() +
+        scale_x_log10() +
+        xlab('health expenditure per capita (US dollars, in logs)') +
+        ylab('life expectancy (yrs)') +
+        ggtitle('Health Expenditure and Life Expectancy')
+```
+
+### Life expectancy and gdp: differences across gender
+
+```{r}
+# Reshape the data frame to plot life expectancy of men and women together
+
+df_2 <- melt(df_2011, measure.vars = c("life.expect.f", "life.expect.m"))
+
+# Plot using colour as an aesthetic to distinguish lines
+
+ggplot(df_2, aes(value, gdp.pc, colour = variable)) +
+        geom_point() +
+        geom_smooth() +
+        scale_y_log10() +
+        xlab('life expectancy (yrs)') +
+        ylab('GDP per capita (US dollars, in logs)') +
+        ggtitle('GDP and Life Expectancy') +
+        scale_colour_discrete(breaks=c("life.expect.f", "life.expect.m"),
+                            labels=c("female",
+                                     "male")) +
+        theme(legend.title=element_blank())
+
+```
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. How did the features of interest vary with other features in the dataset?
+
+There is a high and positive correlation between <code>life.expect</code> and <code>gdp.pc</code>, but looking at the scatter plot we see that the relationship is not linear. The same goes for <code>life.expect</code> and <code>health.expend.pc</code>. 
+
+Doing a log transformation of these indicators results in a closely linear relationship but there is some variability on the lower values of <code>life.expect</code>.
+
+Looking at the effect of <code>gdp.pc</code> separately for men and women, we see that for countries with average life expectancy less than 60, there is no systematic difference between men and women, but for larger life expectancy values, on average men need larger GDP per capita levels to have the same life expectancy than women.
+
+For the indicator <code>co2.em.pc</code> we have a positive correlation, not as strong as the two previously mentioned indicators, and the relationship looks more heterogeneous and appears to have some non-linearity too. 
+
+At first, I thought that <code>co2.em.pc</code> should be negatively correlated with <code>life.expect</code> because more polluted environments lead to higher incidences in respiratory diseases, etc. However, this is probably due to the fact that countries with larger emissions are mostly developed countries. Indeed, we an see the correlation between <code>gdp.pc</code> and <code>co2.em.pc</code> is strong and positive. So this correlation may be showing the effect of a country's development level on life expectancy.
+
+There is no apparent significant relationship between <code>life.expect</code> and <code>unemp.rate.tot</code>.
+
+<code>rural</<code> is negatively correlated with <code>life.expect</code>.
+
+Countries with higher sanitation access have on average higher life expectancy and this is also true for countries not in the tropics region. These two indicators also show significant different distributions by category.
+
+### Did you observe any interesting relationships between the other features?
+
+<code>gdp.pc</code> and <code>health.expend.pc</code> are also highly positively correlated and the relationship is closely linear.
+
+# Multivariate Plots Section
+
+### CO2 emmissions effects: accounting for country income differences.
+
+Here, I focused again on data for only one year to get rid of time trends.
+Let's use the World Bank country income classifications to account for
+differences in income.
+
+```{r}
+
+ggplot(data=subset(df_2011, !is.na(co2.em.pc)), 
+        aes(x = co2.em.pc, y = life.expect, color = income)) + 
+        scale_x_log10() + 
+        geom_smooth(lwd = 1, se = FALSE, method = "lm") + 
+        geom_point() + 
+        geom_text(aes(label = ifelse(co2.em.pc > 4*IQR(co2.em.pc) |
+                   life.expect < 50, as.character(iso2c),'')), 
+                   hjust=1.1, check_overlap = TRUE) +
+        xlab('CO2 emmissions per capita (metric tons)') +
+        ylab('life expectancy (yrs)') +
+        ggtitle('CO2 Emmissions and Life Expectancy')
+```
+
+Accounting for income differences across countries, We can see that for High Income:nonOECD and upper middle income countries, <code>co2.em.pc</code> has a negative correlation with life expectancy. 
+
+####Only non-rural countries
+```{r}
+ggplot(data=subset(df_2011, rural == FALSE & !is.na(co2.em.pc)), 
+        aes(x = co2.em.pc, y = life.expect, color = income)) + 
+        scale_x_log10() + 
+        geom_smooth(lwd = 1, se = FALSE, method = "lm") + 
+        geom_point() + 
+        geom_text(aes(label = ifelse(co2.em.pc > 4*IQR(co2.em.pc) |
+                   life.expect < 56, as.character(iso2c),'')), 
+                   hjust=1.1, check_overlap = TRUE ) +
+        xlab('CO2 emmissions per capita (metric tons)') +
+        ylab('life expectancy (yrs)') +
+        ggtitle('CO2 Emmissions and Life Expectancy')
+```
+
+
+### GDP and life expectancy
+
+Since GDP per capita and health expenditure are highly correlated, let's focus on the effect of only one. Let's see if the relationship between GDP and life expectancy changes for rural countries and tropical countries.
+Let's also see if these differences vary by gender.
+
+```{r}
+
+ggplot(aes(x = gdp.pc, y = life.expect),
+       data = subset(df_2011, !is.na(rural) & !is.na(gdp.pc))) + 
+        geom_point() +
+        geom_smooth() +
+        scale_x_log10() +
+        facet_wrap(~rural) +
+        xlab('GDP per capita (US dollars, in logs)') +
+        ylab('life expectancy (yrs)') +
+        ggtitle('GDP and Life Expectancy (Rural vs non-Rural Countries)')
+
+```
+
+```{r}
+
+ggplot(aes(x = gdp.pc, y = life.expect),
+       data = subset(df_2011, !is.na(tropic) & !is.na(gdp.pc))) + 
+        geom_point() +
+        geom_smooth() +
+        scale_x_log10() +
+        facet_wrap(~tropic) +
+        xlab('GDP per capita (US dollars, in logs)') +
+        ylab('life expectancy (yrs)') +
+        ggtitle('GDP and Life Expectancy (Tropical vs non-Tropical Countries)')
+
+
+```
+
+####Differences across genders
+
+```{r}
+
+ggplot(data = subset(df_2, !is.na(rural)), 
+        aes(gdp.pc, value, colour = variable)) + 
+        geom_point() +
+        geom_smooth() +
+        scale_x_log10() +
+        facet_wrap(~rural) +
+        scale_colour_discrete(breaks=c("life.expect.f", "life.expect.m"),
+                            labels=c("female",
+                                     "male")) +
+        theme(legend.title=element_blank()) +
+        xlab('GDP per capita (US dollars, in logs)') +
+        ylab('life expectancy (yrs)') +
+        ggtitle('GDP and Life Expectancy (Rural vs non-Rural Countries)')
+
+```
+
+```{r}
+
+ggplot(data = subset(df_2, !is.na(tropic)), 
+        aes(gdp.pc, value, colour = variable)) + 
+        geom_point() +
+        geom_smooth() +
+        scale_x_log10() +
+        facet_wrap(~tropic) +
+        scale_colour_discrete(breaks=c("life.expect.f", "life.expect.m"),
+                            labels=c("female",
+                                     "male")) +
+        theme(legend.title=element_blank()) +
+        xlab('GDP per capita (US dollars, in logs)') +
+        ylab('life expectancy (yrs)') +
+        ggtitle('GDP and Life Expectancy (Tropical vs non-Tropical Countries)')
+
+```
+
+### Changes in life expectancy by year: regions.
+
+```{r}
+
+df.le_by_region <- df %>% 
+        group_by(region, year) %>%
+        summarise(mean_le = mean(life.expect),
+                  median_le = median(as.numeric(life.expect)),
+                  n = n()) %>%
+        ungroup()
+
+ggplot(aes(x = year, y = mean_le),
+       data = df.le_by_region) + 
+        geom_line(aes(color=region)) +
+        ylab('Mean life expectancy (yrs)') +
+        ggtitle('Change in Life Expectancy')
+        
+```
+
+### Contructing a Model
+
+Lastly, let's fit a model to better quantify the effect of these indicators on life expectancy. Since we have panel data, I will construct a fixed effects model.
+
+```{r Multivariate_Plots_Model}
+
+# I'll do a log transformation of the gdp.pc variable to account for the
+# non-linear relationship.
+# Use only gdp.pc and not health.epxend.pc because of their high correlation
+# and possible issues with multicollinearity.
+
+reg.fixed <- plm(life.expect ~ I(log(gdp.pc)) + co2.em.pc + rural +  
+             san.access.pct, data=df, 
+             index=c("country", "year"), model="within")
+
+summary(reg.fixed)
+
+```
+
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of looking at your features of interest?
+
+Accounting for income differences across countries, the effect of <code>co2.em.pc</code> on <code>life.expect</code> was different. For High Income: non-OECD and upper middle income countries, <code>co2.em.pc</code> had a negative relationship with <code>life.expect</code> whereas for Low income and Lower middle income countries, the relationship was positive.
+
+There is a stronger relationship between <code>health.expend.pc</code> and <code>life.expect</code> for non-rural countries than for rural countries. This could mean that rural countries spend less on health because they are in general lower income countries and we saw earlier how highly correlated <code>health.expend.pc</code> was to <code>gdp.pc</code> and <code>gdp.pc</code> to <code>life.expect</code>. It could also be that for every dollar spent on health in urban countries more people are covered than in rural countries. Therefore, at the same health expenditure level, the effect on life expectancy on urban countries is larger. 
+
+There is a similar trend when looking at the relationship between <code>health.expend.pc</code> and <code>life.expect</code> for tropical and not tropical countries. The explanation could be similar to the explanation for rural versus non-rural countries.
+
+
+### Were there any interesting or surprising interactions between features?
+
+When looking at the change in life expectancy over the years by region, life expectancy increased from 2005 to 2013 in all regions but the rate of increase was different across regions. Countries with initial lower life expectancy increased at a faster rate than countries with initial high life expectancy. 
+
+### Did you create any models with your dataset? Discuss the strengths and limitations of your model.
+
+I created a fixed effects (FE) model to remove the effect of time-invariant characteristics of countries that I did not observe. 
+
+The coefficients estimated measure how much life expectancy changes overtime, on average per country, when the indicator increases by one unit. Estimates show that the effect of <code>gdp.pc</code> on <code>life.expect</code> is positive and statistically significant, as is the effect of <code>san.access.pct</code>. The effect of <code>rural</<code> is not significant.  
+
+Unlike what we observed in the plot analysis, <code>co2.em.pc</code> has a negative effect on <code>life.expect</code>. In the previous plot analysis, it was difficult to elucidate the relationship between <code>co2.em.pc</code> and <code>life.expect</code> because of great heterogeneity in our observations. The FE model allows us to control for characteristics that are inherent to each country.  
+
+The FE model allows us to control for unobserved heterogeneity which given our dataset, is an issue of concern. Some limitations of the FE model is that time-invariant effects are not identified, so for instance, the rural coefficient might not be correctly estimated. 
+
+------
+
+# Final Plots and Summary
+
+### Plot One
+```{r Plot_One}
+m3 <- choroplethr_wdi(code = "SP.DYN.LE00.IN", year = 2011, title = "Life
+                      Expectancy in 2011", num_colors = 7)
+m3
+
+ggplot(aes(x = gdp.pc, y = life.expect),
+       data = df_2011) + 
+        geom_point() +
+        geom_smooth() +
+        scale_x_log10() +
+        xlab('GDP per capita (US dollars, in logs)') + 
+        ylab('Average Life Expectancy (yrs)') +
+        ggtitle('Life Expectancy and GDP')
+        
+```
+
+### Description One
+Plot one is compromised of two parts. The first plot shows a choroplethr map where countries are colored by their value of average life expectancy. This value was categorized in 7 different intervals. There is missing data for Namibia and only data for 2011 was considered. The majority of countries with the lowest life expectancy, from 48.2 to 64.8, are in Sub-Saharan Africa. Countries with life expectancy between 64.8 and 73.8 are in Latin America and some parts of Asia. Countries with the highest life expectancy are in Europe, North America, and Oceania. Because this map appeared to show a correlation between economic development and life expectancy, plot one part II is a scatter plot of average life expectancy and GDP per capita for the year 2011. Here, I did a log transformation of GDP per capita and added a trend line with a 95 % confidence interval. The line is close to linear and has a positive slope, indicating a positive relationship between GDP and life expectancy and in line with the results in the choroplethr map. Countries with lower GDP per capita have lower values of life expectancy.
+
+
+### Plot Two
+```{r Plot_Two}
+
+ggplot(data=subset(df_2011, !is.na(co2.em.pc)), 
+        aes(x = co2.em.pc, y = life.expect, color = income)) + 
+        scale_x_log10() + 
+        geom_smooth(lwd = 1, se = FALSE, method = "lm") + 
+        geom_point() + 
+        geom_text(aes(label = ifelse(co2.em.pc > 4*IQR(co2.em.pc) |
+                   life.expect < 50, as.character(iso2c),'')), 
+                   hjust=1.1, check_overlap = TRUE) +
+        xlab('CO2 emmissions per capita (metric tons)') +
+        ylab('Average Life Expectancy (yrs)') +
+        ggtitle(expression(atop("Life Expectancy and CO2 emmissions", 
+                                atop(italic("By Income Level"), ""))))
+        
+```
+
+### Description Two
+This figure shows a scatter plot of countries' CO2 emissions and average life expectancy with a linear trend line. Different colors in the plot indicate different income levels. CO2 emissions are log transformed and only data for the year 2011 was used. Also, outlier values for CO2 emissions and life expectancy are labeled with the country name. For low and lower middle income countries life expectancy and CO2 emissions are positively correlated, for high income non OECD countries this correlation is negative and for upper middle income and high income OECD countries the relationship is almost flat, it has a small negative slope. This plot shows that for poorer countries possibly the gains from development are offset by the negativeness of CO2 emissions when it comes to life expectancy. However, we see this relationship revert for higher income countries.
+
+
+### Plot Three
+```{r Plot_Three}
+
+ggplot(aes(x = year, y = mean_le),
+       data = df.le_by_region) + 
+        geom_line(aes(color=region)) +
+        xlab('Year') +
+        ylab("Average life expectancy (yrs)") +
+        ggtitle(expression(atop("Change in life Expectancy from 2005 to 2013", 
+                                atop(italic("By Regions"), ""))))
+   
+```
+
+### Description Three
+
+This figure shows a line with the change in average life expectancy from 2005 to 2013. Different colors in the plot indicate different regions. The plot shows that average life expectancy grew for all regions but at different rates. The highest growth rate was in countries in the Sub-Saharan Africa region followed by countries in South Asia. Next, were countries in Middle East and North Africa, Latin America and East Asia and the Pacific. Lastly, European countries appear to have a higher growth rate than North American countries.
+
+------
+
+# Reflection
+
+In this study we analyzed what where the determinants of average life expectancy in countries across the world. We mainly explored indicators related to income levels of countries or indicators highly affected by income such as access to sanitation. We also looked at differences among genders, rural and tropical countries. Lastly, we also looked at the change in life expectancy from 2005 to 2013. 
+
+Through these data visualizations, we found strong correlations between GDP per capita and average life expectancy. We also found significant correlations between life expectancy and access to sanitation and health expenditure. These findings were also present in the results from the fixed effects model. We found no significant difference among rural and tropical countries. The relationship between life expectancy and CO2 emissions appeared to be positive at first, but when we looked at countries by income level, we saw that CO2 emissions was negatively correlated with higher income countries while positively correlated with poorer countries. The FE model estimates showed a negative and statistically significant effect of CO2 emissions on life expectancy. Lastly, we found that the average life expectancy growth rate was different among regions, with higher growth rates in poorer countries, maybe suggesting a convergence trend.
+
+It is possible to further explore this dataset by looking at more disaggregated data. There are probably large differences in life expectancy among countries. This could also help capture differences between rural and urban population's life expectancy and better capture differences of the effect of CO2 emissions. It would also be interesting to see how countries' different health systems affect life expectancy.
+
+
+
