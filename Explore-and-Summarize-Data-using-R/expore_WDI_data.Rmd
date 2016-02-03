@@ -560,7 +560,7 @@ At first, I thought that <code>co2.em.pc</code> should be negatively correlated 
 
 There is no apparent significant relationship between <code>life.expect</code> and <code>unemp.rate.tot</code>.
 
-<code>rural</<code> is negatively correlated with <code>life.expect</code>.
+<code>rural</code> is negatively correlated with <code>life.expect</code>.
 
 Countries with higher sanitation access have on average higher life expectancy and this is also true for countries not in the tropics region. These two indicators also show significant different distributions by category.
 
@@ -739,7 +739,7 @@ When looking at the change in life expectancy over the years by region, life exp
 
 I created a fixed effects (FE) model to remove the effect of time-invariant characteristics of countries that I did not observe. 
 
-The coefficients estimated measure how much life expectancy changes overtime, on average per country, when the indicator increases by one unit. Estimates show that the effect of <code>gdp.pc</code> on <code>life.expect</code> is positive and statistically significant, as is the effect of <code>san.access.pct</code>. The effect of <code>rural</<code> is not significant.  
+The coefficients estimated measure how much life expectancy changes overtime, on average per country, when the indicator increases by one unit. Estimates show that the effect of <code>gdp.pc</code> on <code>life.expect</code> is positive and statistically significant, as is the effect of <code>san.access.pct</code>. The effect of <code>rural</code> is not significant.  
 
 Unlike what we observed in the plot analysis, <code>co2.em.pc</code> has a negative effect on <code>life.expect</code>. In the previous plot analysis, it was difficult to elucidate the relationship between <code>co2.em.pc</code> and <code>life.expect</code> because of great heterogeneity in our observations. The FE model allows us to control for characteristics that are inherent to each country.  
 
