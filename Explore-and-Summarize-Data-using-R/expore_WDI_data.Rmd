@@ -18,12 +18,9 @@ knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/', echo=FALSE, 
 # Load packages
 
 library(rgeos)
-#install.packages("Cairo")
 library(Cairo)
-#library(ggmap)
 library(scales)
 library(RColorBrewer)
-
 library(ggplot2)
 library(dplyr)
 library(tidyr)
@@ -31,7 +28,6 @@ library(readr)
 library(reshape)
 library(reshape2)
 library(maptools)
-#library(rworldmap)
 library(curl)
 library(stringi)
 library(geosphere)
