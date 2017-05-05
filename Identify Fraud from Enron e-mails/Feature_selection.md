@@ -5,15 +5,15 @@
 
 These were:
 
-```loan_advances```
-```restricted_stock_deferred```
-```director_fees```
+* ```loan_advances```
+* ```restricted_stock_deferred```
+* ```director_fees```
 
 I used a min max scaler because I included features with very different scales, as the case of salary and from_messages, this way it is 
 easier to compare them. 
 
 I created one new feature: <br />
-```sent_recieved_ratio```:  ratio of from messages to received messages.
+* ```sent_recieved_ratio```:  ratio of from messages to received messages.
 
 The rationale behind this is that I thought persons of interest might send fewer messages related to the number of messages received.
 
